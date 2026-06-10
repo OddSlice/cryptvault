@@ -239,14 +239,22 @@
       handleConfirm();
     } else if (game.gameState === 'levelup') {
       tryPickCard(p.x, p.y);
+    } else if (game.gameState === 'classselect') {
+      tryPickClass(p.x, p.y);
     }
   });
 
   function handleConfirm() {
     if (game.gameState === 'title') {
-      startGame();
+      if (runData.unlockedClasses) {
+        enterClassSelect();
+      } else {
+        // first-run experience: no class screen, default stats
+        currentClass = 'warrior';
+        startGame();
+      }
     } else if (game.gameState === 'gameover') {
-      startGame();
+      game.gameState = 'title';
     }
   }
 
@@ -298,6 +306,115 @@
   ];
 
   // ---------------------------------------------------------------------------
+  // PERSISTENT RUN DATA (localStorage)
+  // ---------------------------------------------------------------------------
+  var SAVE_KEY = 'cryptvault_data';
+
+  function defaultRunData() {
+    return { bestWave: 1, bestKills: 0, bestLevel: 1, totalRuns: 0, totalKills: 0, unlockedClasses: false };
+  }
+
+  function saveRunData() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(runData)); } catch (e) { /* storage unavailable */ }
+  }
+
+  function loadRunData() {
+    var def = defaultRunData();
+    try {
+      var raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return def;
+      var data = JSON.parse(raw);
+      for (var k in def) if (!(k in data)) data[k] = def[k];
+      return data;
+    } catch (e) {
+      // malformed JSON from an older version — reset the stored key to defaults
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(def)); } catch (e2) {}
+      return def;
+    }
+  }
+
+  var runData = loadRunData();
+
+  // ---------------------------------------------------------------------------
+  // STARTING CLASSES (unlocked by reaching wave 3 once)
+  // ---------------------------------------------------------------------------
+  var CLASSES = [
+    { id: 'warrior', name: 'WARRIOR', color: '#cc3333', hp: 160, speed: 60,  damage: 20, cooldown: 1.1,  pierce: 0, homingBase: 0,    bars: [5, 2, 3] },
+    { id: 'rogue',   name: 'ROGUE',   color: '#33cc66', hp: 70,  speed: 110, damage: 15, cooldown: 0.55, pierce: 0, homingBase: 0,    bars: [2, 5, 2] },
+    { id: 'mage',    name: 'MAGE',    color: '#6633cc', hp: 85,  speed: 65,  damage: 30, cooldown: 1.0,  pierce: 1, homingBase: 0.06, bars: [2, 2, 5] }
+  ];
+  var currentClass = 'warrior';
+  var classCards = [];
+
+  function enterClassSelect() {
+    var cardW = 120, cardH = 140, gap = 16;
+    var totalW = CLASSES.length * cardW + (CLASSES.length - 1) * gap;
+    var startX = (W - totalW) / 2;
+    classCards = CLASSES.map(function (c, i) {
+      return { cls: c, x: startX + i * (cardW + gap), y: 135 - cardH / 2, w: cardW, h: cardH };
+    });
+    game.gameState = 'classselect';
+  }
+
+  function tryPickClass(mx, my) {
+    for (var i = 0; i < classCards.length; i++) {
+      var c = classCards[i];
+      if (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) {
+        currentClass = c.cls.id;
+        startGame();
+        return;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PROCEDURAL DUNGEON WALLS (seeded per wave — same wave, same layout)
+  // ---------------------------------------------------------------------------
+  var walls = [];
+
+  function generateWalls(waveNumber) {
+    // seed MUST be re-derived from the wave number on every call so layouts
+    // are reproducible — never reuse leftover PRNG state from a prior wave.
+    var seed = waveNumber * 9301 + 49297;
+    var srand = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    var sizes = [[32, 32], [32, 64], [64, 32]];
+    var count = 8 + Math.floor(srand() * 5); // 8..12 chunks
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      for (var attempt = 0; attempt < 10; attempt++) {
+        var size = sizes[Math.floor(srand() * 3)];
+        var cw = size[0], ch = size[1];
+        var x = Math.round(30 + srand() * (W - 60 - cw));
+        var y = Math.round(30 + srand() * (H - 60 - ch));
+        // keep clear of the player spawn at canvas centre (80px radius)
+        var nx = clamp(W / 2, x, x + cw), ny = clamp(H / 2, y, y + ch);
+        var cdx = W / 2 - nx, cdy = H / 2 - ny;
+        if (cdx * cdx + cdy * cdy < 80 * 80) continue;
+        // no overlap with already-placed walls
+        var hit = false;
+        for (var j = 0; j < out.length; j++) {
+          var o = out[j];
+          if (x < o.x + o.w && x + cw > o.x && y < o.y + o.h && y + ch > o.y) { hit = true; break; }
+        }
+        if (hit) continue;
+        out.push({ x: x, y: y, w: cw, h: ch, tileVariant: Math.floor(srand() * 2) });
+        break;
+      }
+    }
+    return out;
+  }
+
+  // First wall intersecting a centred box, or null.
+  function boxHitsWall(cx, cy, bw, bh) {
+    var l = cx - bw / 2, r = cx + bw / 2, t = cy - bh / 2, b = cy + bh / 2;
+    for (var i = 0; i < walls.length; i++) {
+      var wl = walls[i];
+      if (l < wl.x + wl.w && r > wl.x && t < wl.y + wl.h && b > wl.y) return wl;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
   // GAME STATE
   // ---------------------------------------------------------------------------
   var game = {
@@ -325,6 +442,8 @@
     blinkTimer: 0,
     blinkOn: true,
     cards: [],
+    shockwaves: [],       // active edge-shockwave effects
+    newRecord: false,     // did the last run break a personal best?
     player: null
   };
 
@@ -343,6 +462,7 @@
       projectiles: 1,
       damage: 20,
       pierce: 0,
+      homingBase: 0,     // innate homing (mage class) without the upgrade
       vampire: 0,
       xpMult: 1,
       shotgun: 0,        // shotgun blast level
@@ -379,7 +499,25 @@
     game.time = 0;
     game.enemyUid = 0;
     game.advanceAfterLevel = false;
+    game.newRecord = false;
     game.player = makePlayer();
+    // apply class stats only once classes are unlocked — the first-run
+    // experience uses the untouched default player.
+    if (runData.unlockedClasses) {
+      var cls = null;
+      for (var ci = 0; ci < CLASSES.length; ci++) {
+        if (CLASSES[ci].id === currentClass) cls = CLASSES[ci];
+      }
+      if (cls) {
+        var pl = game.player;
+        pl.maxHp = cls.hp; pl.hp = cls.hp;
+        pl.speed = cls.speed;
+        pl.damage = cls.damage;
+        pl.attackCooldown = cls.cooldown;
+        pl.pierce = cls.pierce;
+        pl.homingBase = cls.homingBase;
+      }
+    }
     buildFloor();
     beginWave(1);
   }
@@ -394,6 +532,13 @@
     game.waveKills = 0;
     game.waveTarget = game.bossWave ? 1 : (15 + n * 5);
     game.spawnTimer = 0;
+    game.shockwaves = [];
+    walls = generateWalls(n);
+    // clear edge flags on any enemies (safety against false detonations)
+    for (var ce = 0; ce < game.enemies.length; ce++) {
+      game.enemies[ce].atEdge = false;
+      game.enemies[ce].edgeTimer = 0;
+    }
     game.gameState = 'waveintro';
     game.waveIntroTimer = 2.0;
   }
@@ -481,6 +626,23 @@
     }
   }
 
+  // Small grey sparks where a projectile strikes a wall.
+  function spawnWallSparks(x, y) {
+    for (var i = 0; i < 3; i++) {
+      if (game.particles.length >= 500) break;
+      var ang = rand(0, Math.PI * 2);
+      var spd = rand(30, 70);
+      game.particles.push({
+        x: x, y: y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        life: 0.3, maxLife: 0.3,
+        size: 2,
+        color: '#99a3ad'
+      });
+    }
+  }
+
   // Over-the-top boss death burst: 40 red/orange/gold 3x3 particles.
   function bossExplosion(x, y) {
     var cols = ['#ff2d2d', '#ff8c00', '#ffd700'];
@@ -520,8 +682,9 @@
       vy: Math.sin(ang) * 200,
       damage: dmg,
       pierce: p.pierce,
-      // homing strength: 0.08 base, +0.04 per extra pick (0 if not taken)
-      homing: p.homing > 0 ? (0.08 + (p.homing - 1) * 0.04) : 0,
+      // homing strength: 0.08 base, +0.04 per extra pick; mage has an
+      // innate 0.06 without the upgrade.
+      homing: p.homing > 0 ? (0.08 + (p.homing - 1) * 0.04) : (p.homingBase || 0),
       hitSet: []
     });
   }
@@ -663,8 +826,12 @@
     if (p.moving) {
       var len = Math.sqrt(dx * dx + dy * dy);
       dx /= len; dy /= len;
-      p.x += dx * p.speed * dt;
-      p.y += dy * p.speed * dt;
+      // axis-separated wall collision so the player slides along walls
+      var pnx = p.x + dx * p.speed * dt;
+      var pny = p.y + dy * p.speed * dt;
+      if (!boxHitsWall(pnx, pny, p.w, p.h)) { p.x = pnx; p.y = pny; }
+      else if (!boxHitsWall(pnx, p.y, p.w, p.h)) { p.x = pnx; }
+      else if (!boxHitsWall(p.x, pny, p.w, p.h)) { p.y = pny; }
       if (dx < 0) p.facing = -1;
       else if (dx > 0) p.facing = 1;
       p.walkAnim += dt * 8;
@@ -714,6 +881,18 @@
       }
       pr.x += pr.vx * dt;
       pr.y += pr.vy * dt;
+      // wall impact — only on entry, so a piercing shot pays once per wall
+      var hitWall = boxHitsWall(pr.x, pr.y, 6, 6);
+      if (hitWall && !pr.inWall) {
+        spawnWallSparks(pr.x, pr.y);
+        if (pr.pierce > 0) {
+          pr.pierce--;
+        } else {
+          game.projectiles.splice(i, 1);
+          continue;
+        }
+      }
+      pr.inWall = !!hitWall;
       if (pr.x < -8 || pr.x > W + 8 || pr.y < -8 || pr.y > H + 8) {
         game.projectiles.splice(i, 1);
       }
@@ -723,15 +902,55 @@
     for (var j = game.enemies.length - 1; j >= 0; j--) {
       var e = game.enemies[j];
       if (e.hitFlash > 0) e.hitFlash -= dt;
-      // knockback decays
-      e.x += e.kx * dt;
-      e.y += e.ky * dt;
-      e.kx *= 0.85; e.ky *= 0.85;
-      // chase player
+      // desired velocity: chase the player, plus decaying knockback
       var edx = p.x - e.x, edy = p.y - e.y;
       var ed = Math.sqrt(edx * edx + edy * edy) || 1;
-      e.x += (edx / ed) * e.speed * dt;
-      e.y += (edy / ed) * e.speed * dt;
+      var mvx = (edx / ed) * e.speed + e.kx;
+      var mvy = (edy / ed) * e.speed + e.ky;
+      e.kx *= 0.85; e.ky *= 0.85;
+
+      // soft repulsion away from any wall within 20px — steering-based
+      // avoidance so enemies flow around corners (no pathfinding)
+      for (var wi = 0; wi < walls.length; wi++) {
+        var wl = walls[wi];
+        var wnx = clamp(e.x, wl.x, wl.x + wl.w);
+        var wny = clamp(e.y, wl.y, wl.y + wl.h);
+        var rdx = e.x - wnx, rdy = e.y - wny;
+        var rd = Math.sqrt(rdx * rdx + rdy * rdy);
+        if (rd > 0 && rd < 20) {
+          var rf = (1 - rd / 20) * 60;
+          mvx += (rdx / rd) * rf;
+          mvy += (rdy / rd) * rf;
+        }
+      }
+
+      // axis-separated wall collision (full bounding box, not centre point)
+      var enx = e.x + mvx * dt, eny = e.y + mvy * dt;
+      if (!boxHitsWall(enx, eny, e.w, e.h)) {
+        e.x = enx; e.y = eny;
+      } else if (!boxHitsWall(enx, e.y, e.w, e.h)) {
+        e.x = enx;
+      } else if (!boxHitsWall(e.x, eny, e.w, e.h)) {
+        e.y = eny;
+      }
+      // both axes blocked: stay put this frame
+
+      // screen-edge danger countdown (bosses are immune)
+      if (!e.isBoss) {
+        var nearEdge = (e.x < 10 || e.x > W - 10 || e.y < 10 || e.y > H - 10);
+        if (nearEdge) {
+          if (!e.atEdge) { e.atEdge = true; e.edgeTimer = 0; }
+          e.edgeTimer += dt;
+          if (e.edgeTimer >= 1.5) {
+            triggerShockwave(e.x, e.y);
+            game.enemies.splice(j, 1);
+            continue;
+          }
+        } else {
+          e.atEdge = false;
+          e.edgeTimer = 0;
+        }
+      }
 
       // contact with player
       if (Math.abs(p.x - e.x) < (p.w / 2 + e.w / 2) &&
@@ -749,9 +968,15 @@
         }
         if (p.hp <= 0) {
           p.hp = 0;
-          game.gameState = 'gameover';
+          endRun();
         }
       }
+    }
+
+    // ----- edge shockwave effects tick -----
+    for (var sw = game.shockwaves.length - 1; sw >= 0; sw--) {
+      game.shockwaves[sw].t += dt;
+      if (game.shockwaves[sw].t >= 0.6) game.shockwaves.splice(sw, 1);
     }
 
     // ----- projectile vs enemy collisions -----
@@ -849,6 +1074,34 @@
     gainXP(xpForNext() - game.xp + 1); // guarantees exactly one level-up
   }
 
+  // An enemy survived 1.5s at a screen edge: detonate it.
+  function triggerShockwave(x, y) {
+    game.shockwaves.push({ x: x, y: y, t: 0 });
+    var p = game.player;
+    var dx = p.x - x, dy = p.y - y;
+    if (dx * dx + dy * dy < 120 * 120) {
+      p.hp -= 20;
+      game.damageFlash = 0.1;
+      game.shakeTimer = 0.3;
+      playHit();
+      if (p.hp <= 0) { p.hp = 0; endRun(); }
+    }
+  }
+
+  // The only place persistent records are written — never mid-run.
+  function endRun() {
+    if (game.gameState === 'gameover') return;
+    game.gameState = 'gameover';
+    game.newRecord = false;
+    if (game.wave > runData.bestWave) { runData.bestWave = game.wave; game.newRecord = true; }
+    if (game.score > runData.bestKills) { runData.bestKills = game.score; game.newRecord = true; }
+    if (game.level > runData.bestLevel) { runData.bestLevel = game.level; game.newRecord = true; }
+    runData.totalRuns++;
+    runData.totalKills += game.score;
+    if (game.wave >= 3) runData.unlockedClasses = true; // permanent unlock
+    saveRunData();
+  }
+
   // ---------------------------------------------------------------------------
   // RENDER HELPERS
   // ---------------------------------------------------------------------------
@@ -895,6 +1148,70 @@
         ctx.fillRect(t.x, t.y, 1, TILE_SIZE);
       }
     }
+  }
+
+  function drawWalls() {
+    // NOTE: the sheet tile at (0,144) is the slime sprite in this packing, so
+    // walls always use the boxy procedural style to stay visually distinct.
+    for (var i = 0; i < walls.length; i++) {
+      var wl = walls[i];
+      ctx.fillStyle = wl.tileVariant === 1 ? '#36475a' : '#334455';
+      ctx.fillRect(wl.x, wl.y, wl.w, wl.h);
+      // 1px border
+      ctx.fillStyle = '#556677';
+      ctx.fillRect(wl.x, wl.y, wl.w, 1);
+      ctx.fillRect(wl.x, wl.y + wl.h - 1, wl.w, 1);
+      ctx.fillRect(wl.x, wl.y, 1, wl.h);
+      ctx.fillRect(wl.x + wl.w - 1, wl.y, 1, wl.h);
+      // inner shadow along top/left for 8-bit depth
+      ctx.fillStyle = '#223344';
+      ctx.fillRect(wl.x + 1, wl.y + 1, wl.w - 2, 1);
+      ctx.fillRect(wl.x + 1, wl.y + 1, 1, wl.h - 2);
+      // 16px seams so big chunks read as tiled blocks
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      for (var sx2 = 16; sx2 < wl.w; sx2 += 16) ctx.fillRect(wl.x + sx2, wl.y, 1, wl.h);
+      for (var sy2 = 16; sy2 < wl.h; sy2 += 16) ctx.fillRect(wl.x, wl.y + sy2, wl.w, 1);
+    }
+  }
+
+  // Pulsing warning rings on edge enemies + expanding shockwave rings.
+  function drawEdgeEffects() {
+    for (var i = 0; i < game.enemies.length; i++) {
+      var e = game.enemies[i];
+      if (e.atEdge) {
+        var r = 16 + Math.sin(game.time * Math.PI * 4) * 4; // 12..20px, 0.5s cycle
+        ctx.strokeStyle = 'rgba(255,45,45,0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    for (var s = 0; s < game.shockwaves.length; s++) {
+      var sw = game.shockwaves[s];
+      if (sw.t < 0.4) {
+        var prog = sw.t / 0.4;
+        ctx.strokeStyle = '#ff4444';
+        ctx.globalAlpha = 0.8 * (1 - prog);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, prog * 80, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.globalAlpha = Math.max(0, 1 - sw.t / 0.6);
+      text('SHOCKWAVE!', sw.x, sw.y - 24, 8, '#ff2d2d', 'center');
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Permanent red strips along all four edges: the edges are dangerous.
+  function drawEdgeTint() {
+    ctx.fillStyle = 'rgba(255,0,0,0.15)';
+    ctx.fillRect(0, 0, W, 4);
+    ctx.fillRect(0, H - 4, W, 4);
+    ctx.fillRect(0, 4, 4, H - 8);
+    ctx.fillRect(W - 4, 4, 4, H - 8);
   }
 
   function drawPlayer() {
@@ -1018,6 +1335,7 @@
       ctx.translate(randInt(-3, 3), randInt(-3, 3));
     }
     drawFloor();
+    drawWalls();
     drawParticles();
     // draw enemies sorted by y for a touch of depth
     var sorted = game.enemies.slice().sort(function (a, b) { return a.y - b.y; });
@@ -1025,7 +1343,10 @@
     drawPlayer();
     drawOrbs();
     drawProjectiles();
+    drawEdgeEffects();
     ctx.restore();
+
+    drawEdgeTint();
 
     // damage flash overlay
     if (game.damageFlash > 0) {
@@ -1081,6 +1402,9 @@
       var label = (def ? def.name : id) + ' x' + p.upgradesTaken[id];
       text(label, W - 6, ty + k * 8, 6, '#bbbbbb', 'right');
     }
+
+    // ----- current class (below the active upgrades list) -----
+    text('CLASS: ' + currentClass.toUpperCase(), W - 6, H - 30, 6, '#777777', 'right');
 
     // ----- boss health bar (only while a boss is alive) -----
     if (game.bossWave && game.boss) {
@@ -1142,7 +1466,23 @@
     if (game.blinkOn) {
       text('PRESS ENTER OR CLICK TO BEGIN', W / 2, 160, 6, '#888888', 'center');
     }
-    text('WASD / ARROWS TO MOVE — AUTO-FIRE', W / 2, 200, 6, '#555555', 'center');
+
+    if (runData.totalRuns > 0) {
+      // best-run panel: 200x60, 1px gold border, centred at y=180
+      var px = (W - 200) / 2, py = 180;
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(px - 1, py - 1, 202, 62);
+      ctx.fillStyle = '#0d0d1a';
+      ctx.fillRect(px, py, 200, 60);
+      text('BEST RUN', W / 2, py + 10, 6, '#FFD700', 'center');
+      text('WAVE ' + pad(runData.bestWave, 2), px + 33, py + 34, 6, '#FFD700', 'center');
+      text('KILLS ' + pad(runData.bestKills, 4), W / 2, py + 34, 6, '#ffffff', 'center');
+      text('LVL ' + pad(runData.bestLevel, 2), px + 167, py + 34, 6, '#00e5ff', 'center');
+      text('WASD / ARROWS TO MOVE — AUTO-FIRE', W / 2, 252, 6, '#555555', 'center');
+    } else {
+      // clean first-time experience: no stats panel at all
+      text('WASD / ARROWS TO MOVE — AUTO-FIRE', W / 2, 200, 6, '#555555', 'center');
+    }
   }
 
   function renderGameOver() {
@@ -1151,10 +1491,18 @@
     ctx.fillRect(0, 0, W, H);
     drawAnimatedScanlines(0.05);
 
-    text('YOU DIED', W / 2, 70, 16, '#ff2d2d', 'center');
-    text('WAVE ' + pad(game.wave, 2) + '   KILLS ' + pad(game.score, 4), W / 2, 110, 8, '#ffffff', 'center');
+    text('YOU DIED', W / 2, 60, 16, '#ff2d2d', 'center');
+    // this run's stats
+    text('WAVE ' + pad(game.wave, 2) + '  KILLS ' + pad(game.score, 4) + '  LVL ' + pad(game.level, 2),
+         W / 2, 100, 8, '#ffffff', 'center');
+    if (game.newRecord && game.blinkOn) {
+      text('NEW RECORD!', W / 2, 122, 10, '#ff2d2d', 'center');
+    }
+    // all-time bests beneath
+    text('BEST: WAVE ' + pad(runData.bestWave, 2) + '  KILLS ' + pad(runData.bestKills, 4) +
+         '  LVL ' + pad(runData.bestLevel, 2), W / 2, 145, 6, '#888888', 'center');
     if (game.blinkOn) {
-      text('PRESS ENTER OR CLICK TO RESTART', W / 2, 170, 6, '#ffffff', 'center');
+      text('PRESS ENTER OR CLICK TO RESTART', W / 2, 180, 6, '#ffffff', 'center');
     }
   }
 
@@ -1206,6 +1554,84 @@
         text('OWNED x' + owned, c.x + c.w / 2, c.y + c.h - 20, 6, '#888888', 'center');
       }
     }
+  }
+
+  function drawClassIcon(id, x, y) {
+    // x,y is the top-left of a 40x40 icon area
+    if (id === 'warrior') {
+      // sword: vertical blade, horizontal crossguard, pommel — grey and gold
+      ctx.fillStyle = '#c0c8d0';
+      ctx.fillRect(x + 17, y + 4, 6, 18);
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(x + 12, y + 22, 16, 4);
+      ctx.fillStyle = '#c0c8d0';
+      ctx.fillRect(x + 18, y + 26, 4, 8);
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(x + 17, y + 34, 6, 4);
+    } else if (id === 'rogue') {
+      // dagger tilted 45 degrees, dark green tones
+      ctx.save();
+      ctx.translate(x + 20, y + 20);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = '#9be8b0';
+      ctx.fillRect(-2, -14, 4, 16);
+      ctx.fillStyle = '#1d7a3c';
+      ctx.fillRect(-6, 2, 12, 3);
+      ctx.fillRect(-2, 5, 4, 8);
+      ctx.restore();
+    } else if (id === 'mage') {
+      // staff: shaft, orb on top, small crossbars — purple and white
+      ctx.fillStyle = '#b794f6';
+      ctx.fillRect(x + 18, y + 10, 4, 26);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x + 20, y + 8, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#6633cc';
+      ctx.beginPath();
+      ctx.arc(x + 20, y + 8, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#b794f6';
+      ctx.fillRect(x + 13, y + 16, 14, 2);
+      ctx.fillRect(x + 15, y + 22, 10, 2);
+    }
+  }
+
+  function renderClassSelect() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    drawAnimatedScanlines(0.05);
+
+    text('CHOOSE YOUR CLASS', W / 2, 40, 10, '#FFD700', 'center');
+
+    var labels = ['HP', 'SPEED', 'POWER'];
+    for (var i = 0; i < classCards.length; i++) {
+      var c = classCards[i];
+      var cls = c.cls;
+      var hover = mouse.x >= c.x && mouse.x <= c.x + c.w &&
+                  mouse.y >= c.y && mouse.y <= c.y + c.h;
+
+      // 2px border: gold on hover, class colour otherwise
+      ctx.fillStyle = hover ? '#FFD700' : cls.color;
+      ctx.fillRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
+      ctx.fillStyle = '#101020';
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+
+      text(cls.name, c.x + c.w / 2, c.y + 10, 8, '#ffffff', 'center');
+      drawClassIcon(cls.id, c.x + c.w / 2 - 20, c.y + 30);
+
+      // three 5-segment stat bars
+      for (var b = 0; b < 3; b++) {
+        var by = c.y + 88 + b * 15;
+        text(labels[b], c.x + 8, by, 6, '#bbbbbb');
+        for (var sg = 0; sg < 5; sg++) {
+          ctx.fillStyle = sg < cls.bars[b] ? cls.color : '#2a2a3a';
+          ctx.fillRect(c.x + 58 + sg * 11, by, 8, 7);
+        }
+      }
+    }
+
+    text('CLICK A CLASS TO BEGIN', W / 2, 244, 6, '#888888', 'center');
   }
 
   function renderWaveIntro() {
@@ -1264,6 +1690,9 @@
 
     if (game.gameState === 'title') {
       renderTitle();
+    } else if (game.gameState === 'classselect') {
+      renderClassSelect();
+      drawScanlines();
     } else if (game.gameState === 'gameover') {
       renderGameOver();
       drawScanlines();
