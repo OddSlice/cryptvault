@@ -489,22 +489,22 @@
   // UPGRADE DEFINITIONS
   // ---------------------------------------------------------------------------
   var UPGRADES = [
-    { id: 'multishot', name: 'MULTI-SHOT', desc: '+1 projectile per shot', con: '-15% DAMAGE',     color: '#ff6b6b' },
-    { id: 'atkspeed',  name: 'ATTACK SPD', desc: 'Fire 0.1s faster',       con: 'SHOTS 10% SLOWER', color: '#feca57' },
-    { id: 'damage',    name: 'DMG BOOST',  desc: '+15 damage per shot',    con: 'FIRE 0.05s SLOWER', color: '#ff9ff3' },
-    { id: 'health',    name: 'HEALTH UP',  desc: '+30 max HP, heal 30',    con: '-5 MOVE SPEED',   color: '#1dd1a1' },
-    { id: 'movespeed', name: 'MOVE SPD',   desc: '+20 move speed',         con: '-10 MAX HP',      color: '#54a0ff' },
-    { id: 'pierce',    name: 'PIERCE',     desc: 'Shots pierce +1 foe',    con: '-10% DAMAGE',     color: '#48dbfb' },
-    { id: 'vampire',   name: 'VAMPIRE',    desc: 'Heal 3 HP per kill',     con: '-15 MAX HP',      color: '#ee5253' },
-    { id: 'xpmagnet',  name: 'XP MAGNET',  desc: '+20% XP from kills',     con: 'FOES +8% SPEED',  color: '#5f27cd' },
-    { id: 'shotgun',   name: 'SHOTGUN',    desc: '5-shot 60deg blast',     con: 'FIRE 0.1s SLOWER', color: '#ff9f1c' },
-    { id: 'homing',    name: 'HOMING SHOT',desc: 'Shots seek foes',        con: 'SHOTS 15% SLOWER', color: '#2ec4b6' },
-    { id: 'shield',    name: 'ORBIT SHIELD',desc:'Orbs circle you',        con: '-8 MOVE SPEED',   color: '#00e5ff' },
+    { id: 'multishot', name: 'MULTI-SHOT', desc: '+1 projectile per shot', con: '-15% DAMAGE',     detail: 'STACKS - MAX 5 SHOTS',   color: '#ff6b6b' },
+    { id: 'atkspeed',  name: 'ATTACK SPD', desc: 'Fire 0.1s faster',       con: 'SHOTS 10% SLOWER', detail: 'STACKS - MIN 0.2S',     color: '#feca57' },
+    { id: 'damage',    name: 'DMG BOOST',  desc: '+15 damage per shot',    con: 'FIRE 0.05s SLOWER', detail: 'STACKS',               color: '#ff9ff3' },
+    { id: 'health',    name: 'HEALTH UP',  desc: '+30 max HP, heal 30',    con: '-5 MOVE SPEED',   detail: 'STACKS',                 color: '#1dd1a1' },
+    { id: 'movespeed', name: 'MOVE SPD',   desc: '+20 move speed',         con: '-10 MAX HP',      detail: 'STACKS',                 color: '#54a0ff' },
+    { id: 'pierce',    name: 'PIERCE',     desc: 'Shots pierce +1 foe',    con: '-10% DAMAGE',     detail: 'STACKS',                 color: '#48dbfb' },
+    { id: 'vampire',   name: 'VAMPIRE',    desc: 'Heal 3 HP per kill',     con: '-15 MAX HP',      detail: 'STACKS',                 color: '#ee5253' },
+    { id: 'xpmagnet',  name: 'XP MAGNET',  desc: '+20% XP from kills',     con: 'FOES +8% SPEED',  detail: 'STACKS',                 color: '#5f27cd' },
+    { id: 'shotgun',   name: 'SHOTGUN',    desc: '5-shot 60deg blast',     con: 'FIRE 0.1s SLOWER', detail: 'STACKS: +2 PELLETS',    color: '#ff9f1c' },
+    { id: 'homing',    name: 'HOMING SHOT',desc: 'Shots seek foes',        con: 'SHOTS 15% SLOWER', detail: 'STACKS: STRONGER SEEK', color: '#2ec4b6' },
+    { id: 'shield',    name: 'ORBIT SHIELD',desc:'3 orbs circle you',      con: '-8 MOVE SPEED',   detail: 'STACKS: +1 ORB',         color: '#00e5ff' },
     // cursed upgrades: a strong boost with a permanent downside
-    { id: 'greed',       name: 'GREED',        desc: '+50% XP gain',  con: 'FOES +30% HP',      color: '#FFD700', cursed: true },
-    { id: 'darkpact',    name: 'DARK PACT',    desc: '+1 projectile', con: 'CULTISTS HUNT YOU', color: '#9b59b6', cursed: true },
-    { id: 'bloodrage',   name: 'BLOOD RAGE',   desc: '+25 damage',    con: 'FOES +25% SPEED',   color: '#e74c3c', cursed: true },
-    { id: 'glasscannon', name: 'GLASS CANNON', desc: '+60% damage',   con: '-30 MAX HP',        color: '#ecf0f1', cursed: true }
+    { id: 'greed',       name: 'GREED',        desc: '+100% coins',   con: 'FOES +30% HP',      detail: 'PAIRS WITH FORTUNE PERK', color: '#FFD700', cursed: true },
+    { id: 'darkpact',    name: 'DARK PACT',    desc: '+1 projectile', con: 'CULTISTS HUNT YOU', detail: 'STACKS - MAX 6 SHOTS',    color: '#9b59b6', cursed: true },
+    { id: 'bloodrage',   name: 'BLOOD RAGE',   desc: '+25 damage',    con: 'FOES +25% SPEED',   detail: 'STACKS',                  color: '#e74c3c', cursed: true },
+    { id: 'glasscannon', name: 'GLASS CANNON', desc: '+60% damage',   con: '-30 MAX HP',        detail: 'STACKS',                  color: '#ecf0f1', cursed: true }
   ];
 
   // ---------------------------------------------------------------------------
@@ -558,9 +558,94 @@
 
   // Evolutions: rare combo cards offered once both base upgrades are owned.
   var EVOLUTIONS = [
-    { id: 'seekerswarm', name: 'SEEKER SWARM', desc: '+4 pellets, pellets hit harder', con: 'SHOTS 10% SLOWER', color: '#ff2dd0', evolution: true, needs: ['shotgun', 'homing'] },
-    { id: 'bladeorbit',  name: 'BLADE ORBIT',  desc: 'Orbs deal 40 dmg, spin faster',  con: '-5 MOVE SPEED',   color: '#ff4444', evolution: true, needs: ['shield', 'damage'] }
+    { id: 'seekerswarm', name: 'SEEKER SWARM', desc: '+4 pellets, pellets hit harder', con: 'SHOTS 10% SLOWER', detail: 'SHOTGUN + HOMING', color: '#ff2dd0', evolution: true, needs: ['shotgun', 'homing'] },
+    { id: 'bladeorbit',  name: 'BLADE ORBIT',  desc: 'Orbs deal 40 dmg, spin faster',  con: '-5 MOVE SPEED',   detail: 'SHIELD + DMG BOOST', color: '#ff4444', evolution: true, needs: ['shield', 'damage'] }
   ];
+
+  // ---------------------------------------------------------------------------
+  // CARD ART — 12x12 pixel icons ('.' = transparent, letters index the palette)
+  // ---------------------------------------------------------------------------
+  var CARD_ART = {
+    multishot: { pal: { Y: '#ffe600', O: '#ff9f1c' }, rows: [
+      '.Y...Y....Y.', 'YYY.YYY..YYY', '.O...O....O.', '.O...O....O.',
+      '.O...O....O.', '.O...O....O.', '.O...O....O.', '.O...O....O.',
+      '.O...O....O.', '.O...O....O.', '............', '............'] },
+    atkspeed: { pal: { Y: '#ffe600', W: '#ffffff' }, rows: [
+      '......WYYY..', '.....WYYY...', '....WYYY....', '...WYYY.....',
+      '..WYYYYYYYY.', '.....WYYY...', '....WYYY....', '...WYYY.....',
+      '..WYYY......', '..YYY.......', '..YY........', '..Y.........'] },
+    damage: { pal: { W: '#dde4ec', G: '#FFD700', B: '#8a5a2b' }, rows: [
+      '.....WW.....', '.....WW.....', '.....WW.....', '.....WW.....',
+      '.....WW.....', '.....WW.....', '.....WW.....', '..GGGGGGGG..',
+      '.....BB.....', '.....BB.....', '.....BB.....', '....GGGG....'] },
+    health: { pal: { R: '#ff2d2d', P: '#ff9a9a' }, rows: [
+      '..RR....RR..', '.RRRR..RRRR.', 'RRPRRRRRRRRR', 'RPRRRRRRRRRR',
+      'RRRRRRRRRRRR', 'RRRRRRRRRRRR', '.RRRRRRRRRR.', '..RRRRRRRR..',
+      '...RRRRRR...', '....RRRR....', '.....RR.....', '............'] },
+    movespeed: { pal: { B: '#54a0ff', W: '#ffffff', D: '#2b5fa0' }, rows: [
+      '....BB......', '....BB......', '....BB......', '....BBB.....',
+      'W...BBB.....', '....BBBB....', 'W...BBBBB...', '....BBBBBB..',
+      'W...BBBBBBB.', '....BBBBBBBB', '....DDDDDDDD', '............'] },
+    pierce: { pal: { K: '#8a5a2b', C: '#48dbfb' }, rows: [
+      '............', '...KKKKKK...', '...KKKKKK...', '...KKKKKK...',
+      '..........C.', 'CCCCCCCCCCCC', '..........C.', '...KKKKKK...',
+      '...KKKKKK...', '...KKKKKK...', '............', '............'] },
+    vampire: { pal: { D: '#3a1020', W: '#ffffff', R: '#ff2d2d' }, rows: [
+      'DDDDDDDDDDDD', 'DDDDDDDDDDDD', '.WW......WW.', '.WW......WW.',
+      '..W......W..', '..W......W..', '............', '.........R..',
+      '........RRR.', '........RRR.', '.........R..', '............'] },
+    xpmagnet: { pal: { P: '#7d3cc8', W: '#ffffff', C: '#48dbfb' }, rows: [
+      '.WWW....WWW.', '.WWW....WWW.', '.PPP....PPP.', '.PPP....PPP.',
+      '.PPP....PPP.', '.PPP....PPP.', '.PPP....PPP.', '.PPPP..PPPP.',
+      '..PPPPPPPP..', '...PPPPPP...', 'C..........C', '.C........C.'] },
+    shotgun: { pal: { B: '#8a5a2b', O: '#ff9f1c', Y: '#ffe600' }, rows: [
+      '............', '............', '.........Y..', 'BBOOOOOO..Y.',
+      'BBOOOOOOO..Y', 'BBOOOOOO..Y.', '.BB......Y..', '.BB.........',
+      '..BB........', '............', '............', '............'] },
+    homing: { pal: { T: '#2ec4b6', R: '#ff2d2d' }, rows: [
+      '....TTTT....', '..TT....TT..', '.T........T.', '.T........T.',
+      'T....RR....T', 'T...RRRR...T', 'T...RRRR...T', 'T....RR....T',
+      '.T........T.', '.T........T.', '..TT....TT..', '....TTTT....'] },
+    shield: { pal: { C: '#00e5ff', W: '#ffffff' }, rows: [
+      '....CC......', '.........C..', '.C..........', '.....WW...CC',
+      '....WWWW....', 'CC..WWWW....', '.....WW.....', '.........C..',
+      '.C..........', '......CC....', '............', '............'] },
+    greed: { pal: { G: '#FFD700', W: '#fff6c0', D: '#aa8800' }, rows: [
+      '...GGGGGG...', '..GWGGGGGG..', '..GGGGGGGG..', '...DDDDDD...',
+      '...GGGGGG...', '..GWGGGGGG..', '..GGGGGGGG..', '...DDDDDD...',
+      '...GGGGGG...', '..GWGGGGGG..', '..GGGGGGGG..', '...DDDDDD...'] },
+    darkpact: { pal: { H: '#5b2c8e', L: '#7d3cc8', E: '#ff44aa' }, rows: [
+      '....LLLL....', '...LLLLLL...', '..LLLLLLLL..', '..LHHHHHHL..',
+      '..HHHHHHHH..', '..HEH..HEH..', '..HHHHHHHH..', '..HHHHHHHH..',
+      '.HHHHHHHHHH.', '.HHHHHHHHHH.', 'HHHHHHHHHHHH', '............'] },
+    bloodrage: { pal: { A: '#c0c8d0', B: '#8a5a2b', R: '#ff2d2d' }, rows: [
+      '.AAA....AAA.', 'AAAA....AAAA', 'AAAAA..AAAAA', 'AAAABBBBAAAA',
+      '.AAABBBBAAA.', '....BB......', '....BB......', '....BB......',
+      '....BB..R...', '....BB.RRR..', '....BB..R...', '............'] },
+    glasscannon: { pal: { W: '#dde4ec', L: '#aef3ff', C: '#ffffff' }, rows: [
+      '....WWWW....', '.....WW.....', '....WLLW....', '...WLLLLW...',
+      '..WLLCLLLW..', '..WLLC.LLW..', '..WLLLCLLW..', '..WLLLLCLW..',
+      '..WLLLLLLW..', '...WLLLLW...', '....WWWW....', '............'] },
+    seekerswarm: { pal: { M: '#ff2dd0', W: '#ffffff' }, rows: [
+      '..MMW.......', '............', '.....MMW....', '............',
+      'MMW.........', '.......MMW..', '............', '...MMW......',
+      '............', '......MMW...', '.MMW........', '............'] },
+    bladeorbit: { pal: { R: '#ff4444', W: '#ffffff' }, rows: [
+      '.....RR.....', '.....RR.....', '.....RR.....', '.....RR.....',
+      'RRRR.WW.RRRR', 'RRRR.WW.RRRR', '.....WW.....', '.....RR.....',
+      '.....RR.....', '.....RR.....', '.....RR.....', '............'] }
+  };
+
+  function drawPixelIcon(art, x, y, scale) {
+    for (var r = 0; r < art.rows.length; r++) {
+      var row = art.rows[r];
+      for (var c = 0; c < row.length; c++) {
+        if (row[c] === '.') continue;
+        ctx.fillStyle = art.pal[row[c]];
+        ctx.fillRect(x + c * scale, y + r * scale, scale, scale);
+      }
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // PERSISTENT RUN DATA (localStorage)
@@ -822,6 +907,7 @@
       attackTimer: 0,
       frenzyTimer: 0,    // pickup: halves cooldown while > 0
       invuln: 0,         // i-frames after taking a hit
+      coinMult: 1,       // greed curse doubles this
       // upgrade-driven stats
       projectiles: 1,
       damage: 20,
@@ -1260,7 +1346,7 @@
       case 'shield':    p.shield += 1; rebuildOrbs();
                         p.speed = Math.max(40, p.speed - 8); break;
       // cursed upgrades — the downside is permanent for the rest of the run
-      case 'greed':       p.xpMult *= 1.5; game.curseHpMult *= 1.3; break;
+      case 'greed':       p.coinMult *= 2; game.curseHpMult *= 1.3; break;
       case 'darkpact':    p.projectiles = Math.min(6, p.projectiles + 1); game.cultistLevel++; break;
       case 'bloodrage':   p.damage += 25; game.curseSpeedMult *= 1.25; break;
       case 'glasscannon': p.damage = Math.round(p.damage * 1.6);
@@ -1711,7 +1797,7 @@
     }
     game.score++;
     game.waveKills++;
-    game.coinsEarned += (1 + Math.floor(game.wave / 5)) * (1 + 0.25 * runData.shop.frt);
+    game.coinsEarned += (1 + Math.floor(game.wave / 5)) * (1 + 0.25 * runData.shop.frt) * p.coinMult;
     if (game.score === 1) unlockAch('first_blood');
     game.hitStop = Math.max(game.hitStop, 0.03); // tiny punch on every kill
     maybeDropPickup(en.x, en.y);
@@ -1797,7 +1883,7 @@
     bossExplosion(en.x, en.y);
     playBossDeath();
     unlockAch('boss_slayer');
-    game.coinsEarned += 25 * (1 + 0.25 * runData.shop.frt);
+    game.coinsEarned += 25 * (1 + 0.25 * runData.shop.frt) * game.player.coinMult;
     game.whiteFlash = 3;          // flash white for 3 frames
     game.shakeTimer = 0.5;
     game.hitStop = 0.2;           // dramatic freeze-frame
@@ -2523,44 +2609,59 @@
 
       var cursed = !!c.upgrade.cursed;
       var evo = !!c.upgrade.evolution;
+      var tierColor = evo ? '#ff2dd0' : (cursed ? '#9b59b6' : '#FFD700');
+      var cx2 = c.x + c.w / 2;
+
       // hover glow border (2px outside)
       if (hover) {
         ctx.fillStyle = evo ? 'rgba(255,45,208,0.45)' : (cursed ? 'rgba(155,89,182,0.45)' : 'rgba(255,215,0,0.35)');
         ctx.fillRect(c.x - 4, c.y - 4, c.w + 8, c.h + 8);
       }
-      // border: gold normal, purple cursed, magenta evolution
-      ctx.fillStyle = evo ? '#ff2dd0' : (cursed ? '#9b59b6' : '#FFD700');
+      // tier frame + dark card face
+      ctx.fillStyle = tierColor;
       ctx.fillRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
-      // dark bg
       ctx.fillStyle = evo ? '#1f1018' : (cursed ? '#16101f' : '#1a1a2e');
       ctx.fillRect(c.x, c.y, c.w, c.h);
-      if (evo && game.blinkOn) {
-        text('EVOLUTION!', c.x + c.w / 2, c.y + 14, 6, '#ff2dd0', 'center');
+
+      // tier banner across the top — the at-a-glance rarity signal
+      ctx.fillStyle = tierColor;
+      ctx.fillRect(c.x, c.y, c.w, 11);
+      text(evo ? 'EVOLUTION' : (cursed ? 'CURSED' : 'STANDARD'), cx2, c.y + 3, 6, '#0d0d1a', 'center');
+
+      // card name
+      wrapText(c.upgrade.name, cx2, c.y + 17, 8, '#ffffff', c.w - 8);
+
+      // framed pixel art (the "card art" window)
+      var artX = cx2 - 28, artY = c.y + 30;
+      ctx.fillStyle = tierColor;
+      ctx.fillRect(artX - 1, artY - 1, 58, 58);
+      ctx.fillStyle = '#0a0a14';
+      ctx.fillRect(artX, artY, 56, 56);
+      var art = CARD_ART[c.upgrade.id];
+      if (art) {
+        drawPixelIcon(art, artX + 4, artY + 4, 4);
+      } else {
+        ctx.fillStyle = c.upgrade.color;
+        ctx.fillRect(artX + 12, artY + 12, 32, 32);
       }
 
-      // accent stripes in upgrade colour
-      ctx.fillStyle = c.upgrade.color;
-      ctx.fillRect(c.x, c.y, c.w, 6);
-      ctx.fillRect(c.x, c.y + c.h - 6, c.w, 6);
-
-      // icon block
-      ctx.fillStyle = c.upgrade.color;
-      ctx.fillRect(c.x + c.w / 2 - 16, c.y + 30, 32, 32);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(c.x + c.w / 2 - 16, c.y + 30, 32, 16);
-
-      // name + description (word-wrapped); cursed cards show the downside in red
-      wrapText(c.upgrade.name, c.x + c.w / 2, c.y + 78, 8, '#ffffff', c.w - 12);
-      wrapText(c.upgrade.desc, c.x + c.w / 2, c.y + 104, 6, '#bbbbbb', c.w - 12);
+      // effect (white), downside (red), rules text (dim)
+      wrapText(c.upgrade.desc, cx2, c.y + 92, 6, '#ffffff', c.w - 10);
       if (c.upgrade.con) {
-        wrapText('BUT: ' + c.upgrade.con, c.x + c.w / 2, c.y + 124, 6, '#ff5555', c.w - 12);
+        wrapText('BUT: ' + c.upgrade.con, cx2, c.y + 112, 6, '#ff5555', c.w - 10);
+      }
+      if (c.upgrade.detail) {
+        wrapText(c.upgrade.detail, cx2, c.y + 130, 6, '#777799', c.w - 10);
       }
 
       // count owned
       var owned = game.player.upgradesTaken[c.upgrade.id] || 0;
       if (owned > 0) {
-        text('OWNED x' + owned, c.x + c.w / 2, c.y + c.h - 13, 6, '#888888', 'center');
+        text('OWNED x' + owned, cx2, c.y + c.h - 12, 6, '#999999', 'center');
       }
+      // bottom accent stripe in the upgrade's own colour
+      ctx.fillStyle = c.upgrade.color;
+      ctx.fillRect(c.x, c.y + c.h - 4, c.w, 4);
     }
   }
 
@@ -2857,7 +2958,6 @@
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
-
 
 })();
 </script>
