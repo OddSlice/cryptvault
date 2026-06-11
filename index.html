@@ -286,6 +286,9 @@
       } else if (e.code === 'Backspace') {
         nameDraft = nameDraft.slice(0, -1);
         e.preventDefault();
+      } else if (e.code === 'Escape') {
+        pendingMode = 'normal';
+        game.gameState = 'title';
       }
     } else if (game.gameState === 'title') {
       if (e.code === 'KeyN') { nameDraft = ''; game.gameState = 'nameentry'; }
@@ -307,7 +310,7 @@
     } else if (game.gameState === 'achievements') {
       if (e.code === 'Escape' || e.code === 'KeyA') game.gameState = 'title';
     }
-    if (e.code === 'KeyM') toggleMute();
+    if (e.code === 'KeyM' && game.gameState !== 'nameentry') toggleMute();
     if (e.code === 'Enter') handleConfirm();
     if (e.code === 'KeyP' || e.code === 'Escape') {
       if (game.gameState === 'playing') game.gameState = 'paused';
@@ -818,6 +821,7 @@
       attackCooldown: 0.8,
       attackTimer: 0,
       frenzyTimer: 0,    // pickup: halves cooldown while > 0
+      invuln: 0,         // i-frames after taking a hit
       // upgrade-driven stats
       projectiles: 1,
       damage: 20,
@@ -931,6 +935,13 @@
     } else {
       game.waveBanner = 2.0;
       game.gameState = 'playing';
+      // breather: a small heal for surviving the wave
+      var hpl = game.player;
+      var heal = Math.min(15, hpl.maxHp - hpl.hp);
+      if (heal > 0) {
+        hpl.hp += heal;
+        spawnFloatText(hpl.x, hpl.y, '+' + Math.round(heal), '#33ff66');
+      }
       if (game.bossWave) spawnBoss();
     }
   }
@@ -1017,6 +1028,9 @@
       e.contact += 5;
       e.w += 2; e.h += 2;
     }
+    // mid-screen spawns (summoner minions, splitter minis) must not start
+    // inside a wall, or they would be stuck on both axes forever
+    pushOutOfWalls(e);
     game.enemies.push(e);
     return e;
   }
@@ -1169,8 +1183,8 @@
   // ---------------------------------------------------------------------------
   // XP / LEVEL UP
   // ---------------------------------------------------------------------------
-  // steeper curve than Phase 2 so early levels can't snowball into god mode
-  function xpForNext() { return 60 + game.level * 50 + game.level * game.level * 8; }
+  // cheap first levels so the run gets going, steep later so it can't snowball
+  function xpForNext() { return 30 + game.level * 45 + game.level * game.level * 8; }
 
   function gainXP(amount) {
     game.xp += amount;
@@ -1289,7 +1303,6 @@
   // UPDATE
   // ---------------------------------------------------------------------------
   function update(dt) {
-    game.time += dt;
     game.scanlineOffset = (game.scanlineOffset + 1) % 4;
     game.blinkTimer += dt;
     if (game.blinkTimer >= 0.5) { game.blinkTimer = 0; game.blinkOn = !game.blinkOn; }
@@ -1314,6 +1327,9 @@
 
     if (game.gameState !== 'playing') return;
 
+    // run time only advances during actual play (not menus or pause)
+    game.time += dt;
+
     // hit-stop: freeze the world for a few hundredths after a kill
     if (game.hitStop > 0) {
       game.hitStop -= dt;
@@ -1321,6 +1337,7 @@
     }
 
     var p = game.player;
+    if (p.invuln > 0) p.invuln -= dt;
 
     // ----- player movement -----
     var dx = 0, dy = 0;
@@ -1359,7 +1376,8 @@
     }
 
     // ----- enemy spawning (continuous; slower trickle during boss waves) -----
-    var spawnInterval = Math.max(0.25, 1.3 - game.wave * 0.08);
+    // gentle for the first few waves, then ramps to the same late-game pressure
+    var spawnInterval = Math.max(0.25, 1.5 - game.wave * 0.1);
     if (game.bossWave) spawnInterval *= 1.8;
     game.spawnTimer -= dt;
     if (game.spawnTimer <= 0) {
@@ -1531,24 +1549,27 @@
         }
       }
 
-      // contact with player
+      // contact with player (i-frames: damage at most once per 0.5s)
       if (Math.abs(p.x - e.x) < (p.w / 2 + e.w / 2) &&
           Math.abs(p.y - e.y) < (p.h / 2 + e.h / 2)) {
-        p.hp -= e.contact;
-        game.tookDamage = true;
-        game.damageFlash = 0.1;
-        game.shakeTimer = 0.3;
-        playHit();
-        // knock normal enemies back (impulse decays toward ~20px); boss is immovable
+        // knock normal enemies back even during i-frames; boss is immovable
         if (!e.isBoss) {
           var kdx = (e.x - p.x) / ed;
           var kdy = (e.y - p.y) / ed;
           e.kx = kdx * 120;
           e.ky = kdy * 120;
         }
-        if (p.hp <= 0) {
-          p.hp = 0;
-          endRun();
+        if (p.invuln <= 0) {
+          p.hp -= e.contact;
+          p.invuln = 0.5;
+          game.tookDamage = true;
+          game.damageFlash = 0.1;
+          game.shakeTimer = 0.3;
+          playHit();
+          if (p.hp <= 0) {
+            p.hp = 0;
+            endRun();
+          }
         }
       }
     }
@@ -1564,12 +1585,15 @@
         continue;
       }
       if (Math.abs(sh.x - p.x) < (p.w / 2 + 3) && Math.abs(sh.y - p.y) < (p.h / 2 + 3)) {
-        p.hp -= 10;
-        game.tookDamage = true;
-        game.damageFlash = 0.1;
-        playHit();
-        game.enemyShots.splice(es, 1);
-        if (p.hp <= 0) { p.hp = 0; endRun(); }
+        if (p.invuln <= 0) {
+          p.hp -= 10;
+          p.invuln = 0.4;
+          game.tookDamage = true;
+          game.damageFlash = 0.1;
+          playHit();
+          if (p.hp <= 0) { p.hp = 0; endRun(); }
+        }
+        game.enemyShots.splice(es, 1); // the bolt is spent either way
         continue;
       }
       if (sh.x < -8 || sh.x > W + 8 || sh.y < -8 || sh.y > H + 8) {
@@ -1706,8 +1730,9 @@
     game.shakeTimer = 0.25;
     var p = game.player;
     var dx = p.x - e.x, dy = p.y - e.y;
-    if (dx * dx + dy * dy < 50 * 50) {
+    if (dx * dx + dy * dy < 50 * 50 && p.invuln <= 0) {
       p.hp -= 25;
+      p.invuln = 0.5;
       game.tookDamage = true;
       game.damageFlash = 0.1;
       playHit();
@@ -1789,8 +1814,9 @@
     game.shockwaves.push({ x: x, y: y, t: 0 });
     var p = game.player;
     var dx = p.x - x, dy = p.y - y;
-    if (dx * dx + dy * dy < 120 * 120) {
+    if (dx * dx + dy * dy < 120 * 120 && p.invuln <= 0) {
       p.hp -= 20;
+      p.invuln = 0.5;
       game.tookDamage = true;
       game.damageFlash = 0.1;
       game.shakeTimer = 0.3;
@@ -1968,6 +1994,8 @@
 
   function drawPlayer() {
     var p = game.player;
+    // blink while invulnerable so the i-frames read clearly
+    if (p.invuln > 0 && Math.floor(p.invuln * 14) % 2 === 0) return;
     var dx = Math.round(p.x - 8);
     var dy = Math.round(p.y - 8);
     var bob = (p.moving && Math.floor(p.walkAnim) % 2 === 0) ? -1 : 0;
@@ -2829,6 +2857,7 @@
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
+
 
 })();
 </script>
